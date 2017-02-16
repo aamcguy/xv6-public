@@ -1,0 +1,6 @@
+User commands added:
+mv
+
+Files added:
+mv.c # source code for mv user command, currently
+     # relies on link & unlink only

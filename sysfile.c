@@ -441,3 +441,15 @@ sys_pipe(void)
   fd[1] = fd1;
   return 0;
 }
+
+int sys_rename(void)
+{
+  char *old, *new;
+
+  if(argstr(0, &old) < 0 || argstr(1, &new) < 0)
+    return -1;
+
+  cprintf("old: %s\n", old);
+  cprintf("new: %s\n", new);
+  return 0;
+}
