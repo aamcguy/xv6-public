@@ -103,7 +103,7 @@ static char* build_path(char *dir, char *fn)
 static int mv(char *old, char *new)
 {
   struct stat ost, nst;
-  int lennew = strlen(new), lenold;
+  int lennew = strlen(new);
   int ret;
   char *newpath, *dirn;
 
@@ -114,6 +114,10 @@ static int mv(char *old, char *new)
     printf(2, "mv: cannot stat %s. No file or directory exists.\n", old);
     return ret;
   }
+  if( ost.type == T_DEV ) {
+    printf(2, "mv: can only mv regular files and directories.\n");
+    return -1;
+  }
 
   // remove all trailing /'s from the destination name
   while( lennew > 1 && new[lennew-1] == '/' ) {
@@ -121,69 +125,46 @@ static int mv(char *old, char *new)
   }
 
   ret = stat(new, &nst);
-  if( ost.type == T_FILE ) {
-    if( ret == 0 ) {
-      // case1 : mv file file
-      if( nst.type == T_FILE ) {
+  if( ret == 0 ) {
+    // case1 : mv file <file>
+    if( nst.type == T_FILE ) {
+      if( ost.type == T_FILE ) {
         ret = rename(old, new);
       }
-      // case2 : mv file dir
-      else if( nst.type == T_DIR ) {
-        newpath = build_path(new, old);
-        ret = rename(old, newpath);
-        free(newpath);
-      }
-      else {
-        printf(2,"mv: can only mv regular files and directories\n");
-        exit();
-      }
-    }
-    else {
-      // case3 : mv file newfile
-      dirn = dirname(new);
-      if( stat(dirn, &nst) != 0 ) {
-        printf(2,"mv: directory %s doesn't exist\n", dirn);
-        exit();
-      }
-      ret = rename(old, new);
-      free(dirn);
-    }
-  }
-
-
-  else if( ost.type == T_DIR ) {
-    if( ret == 0 ) {
-      if( nst.type == T_DIR ) {
-        // case4 : mv dir dir
-        ret = rename(old, new);
-        if( ret != 0 ) {
-          
-      }
-      else {
-        // case5 : mv dir file,dev
+      else if( ost.type == T_DIR ) {
         printf(2,"mv: can't overwrite non-directory '%s' with directory '%s'\n", new, old);
         exit();
       }
     }
+
+    // case2 : mv file <dir>
+    else if( nst.type == T_DIR ) {
+      newpath = build_path(new, old);
+      ret = rename(old, newpath);
+      free(newpath);
+    }
     else {
-      // case6 : mv dir newdir
+      printf(2,"mv: cannot overwrite device files\n");
+      exit();
     }
   }
+
   else {
-    printf(2, "mv: can only mv regular files and directories.\n");
-    return -1;
+    // case3 : mv file newfile
+    dirn = dirname(new);
+    if( stat(dirn, &nst) != 0 ) {
+      printf(2,"mv: directory %s doesn't exist\n", dirn);
+      free(dirn);
+      exit();
+    }
+    ret = rename(old, new);
+    free(dirn);
   }
 
   return ret;
 }
 
-int main(int argc, char *argv[])
-{
-  rename(argv[1], argv[2]);
-  exit();
-}
 
-/*
 int main( int argc, char *argv[])
 {
   struct stat dest;
@@ -219,4 +200,4 @@ int main( int argc, char *argv[])
   }
 
   exit();
-}*/
+}

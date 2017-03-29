@@ -474,13 +474,13 @@ sys_rename(void)
     return -1;
   }
 
+  // if we're moving a directory, all we need to do is update dir. entries
   if( ip->type == T_DIR ) {
     if( dirlookup(dpnew, newfname, &doff) != 0 ){
       end_op();
       return -1;
     }
     // Lock the dest directory, add a dentry for the directory we are moving
-    cprintf("place1\n");
     ilock(dpnew);
     if( dpnew->dev != ip->dev || dirlink(dpnew, newfname, ip->inum) != 0 ) {
       iunlockput(dpnew);
@@ -497,8 +497,9 @@ sys_rename(void)
     de.inum = dpnew->inum;
     de.name[0] = de.name[1] = '.'; 
     de.name[2] = '\0';
-    if(writei(ip, (char*)&de, doff, sizeof(de)) != sizeof(de))                                                            
+    if(writei(ip, (char*)&de, doff, sizeof(de)) != sizeof(de)) {
       panic("rename");
+    }
 
     // Remove the dentry in the old location by overriding it with 0's
     if( dirlookup(dpold, oldfname, &doff) == 0 ) {    
@@ -507,7 +508,6 @@ sys_rename(void)
     }
     de.inum = 0;
     de.name[0] = '\0';
-    cprintf("place2\n");
     ilock(dpold);
     if(writei(dpold, (char*)&de, doff, sizeof(de)) != sizeof(de))
       panic("rename");
@@ -529,13 +529,13 @@ sys_rename(void)
         end_op();
         return -1;
       }
-      cprintf("place3\n");
       ilock(dpnew);
-      cprintf("place4\n");
       ilock(nip);
       if(ip->nlink < 1) {
         panic("rename: nlink < 1");
       }
+
+      // remove the directory entry
       memset(&de, 0, sizeof(de));
       if( writei(dpnew, (char*)&de, doff, sizeof(de)) != sizeof(de) ) {
         panic("rename: writei");
@@ -547,26 +547,22 @@ sys_rename(void)
     }
     // link old, new; at this point in the code it is guaranteed the new file
     //   doesn't exist
-    cprintf("place5\n");
     ilock(ip);
     ip->nlink++;
     iupdate(ip);
     iunlock(ip);
 
-    cprintf("place6\n");
     ilock(dpnew);
     //rename only works on the same device
     if( dpnew->dev != ip->dev || dirlink(dpnew, newfname, ip->inum) < 0 ) {
       iunlockput(dpnew);
-      //TODO: undo things to ip??
+      end_op();
+      return -1;
     }
     iunlockput(dpnew);
-    //iput(ip);  //free ip if link count has fallen to 0
 
     // now unlink the old
-    cprintf("place7\n");
     ilock(dpold);
-    cprintf("place8\n");
     ilock(ip);
     if(ip->nlink < 1) {
       panic("rename: nlink < 1");
@@ -578,6 +574,7 @@ sys_rename(void)
       return -1;
     }
 
+    // remove the directory entry
     memset(&de, 0, sizeof(de));
     if( writei(dpold, (char*)&de, doff, sizeof(de)) != sizeof(de) ) {
       panic("rename: writei");

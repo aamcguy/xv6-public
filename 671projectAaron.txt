@@ -1,0 +1,101 @@
+Changes
+--------------------------------------------------------------------------------
+System Calls:
+  int rename(char* oldfn, char* newfn)
+    - renames a file or directory from oldfn to newfn, across directories if
+      necessary
+        - fails and returns error if:
+            - newfn's parent directory doesn't exist
+            - oldfn is a directory and newfn already exists
+            - oldfn is a regular file and newfn already exists as a directory
+            - oldfn is a device file and newfn already exists
+    - files modified:
+        - syscall.c : extern int sys_rename(void); and [SYS_rename] sys_rename
+        - syscall.h : #define SYS_rename 22
+        - sysfile.c : contains the rename system call sys_rename()
+        - user.h    : forward declaration
+        - usys.S    : SYSCALL(rename)
+        - NOT defs.h : the sysfile.c files don't appear to be in it, so i
+          followed suit
+
+User Commands:
+  mv
+    - files modifed:
+        - mv.c - contains logic to implement version of mv. This version
+          depends only on the rename system call
+        - Makefile
+            - added _mv to user programs list
+
+
+
+Sources of information
+--------------------------------------------------------------------------------
+OSTEP Chapters 39,40
+  http://pages.cs.wisc.edu/~remzi/OSTEP/
+
+xv6 documentation Chapter 6
+  https://pdos.csail.mit.edu/6.828/2016/xv6/book-rev9.pdf
+  - look particularly closely at the inode sections, the directory layer
+    sections, the pathname sections, and the "Code: System calls" bit
+
+man 2 rename
+  - general template for my rename system call
+
+
+
+Important Structures
+--------------------------------------------------------------------------------
+struct inode;        // file.h
+struct dinode;       // fs.h
+struct dirent;       // fs.h
+
+
+Important Functions
+--------------------------------------------------------------------------------
+log.c
+    void begin_op();
+    void end_op();
+      - at the beginning of every filesystem call, you must call begin_op().
+        This allows for logging of multiple calls so changes may be committed
+        when there are no FS system calls active. end_op() completes the
+        transaction
+
+fs.c
+    void ilock(struct inode *ip);
+    void iunlock(struct inode *ip);
+      - lock or unlock a given inode.  When locking the inode, if the cached
+        in-memory version is out of date, read the inode from disk
+    void iget(uint dev, uint inum);
+    void iput(struct inode *ip);
+      - iget grabs in-memory copy of inode and increases reference to it, does NOT
+        read from the on-disk inode
+      - iput removes the reference to the inode, and frees the inode from disk if
+        no more links to the file remain
+    void iunlockput(struct inode *ip);
+      - unlock, then put
+    void iupdate(struct inode *ip);
+      - copy a modified in-memory inode to disk
+
+    struct inode* dirlookup(struct inode* dp, char* name, uint *poff);
+      - look for a an entry within a directory dp with filename name. If one
+        is found, the inode byte offset is stored in *poff
+    int dirlink(struct inode *dp, char *name, unint inum);
+      - write a new directory entry (name, inum) into directory dp
+    writei(struct inode *ip, char *src, uint off, uint n);
+      - write data located at src into inode ip
+
+    struct inode* namei(char* path);
+      - return the inode of the file with the given path
+    struct inode* nameiparent(char* path, char* name);
+      - return the inode of the parent of the file with the given path. The
+        filename relative to the parent's path is stored in name, which must
+        have at least DIRSIZ bytes available
+
+
+Demo Instructions
+--------------------------------------------------------------------------------
+ - make qemu-nox is sufficient for testing the functionality
+ - user access to rename is provided by the mv function, which implements all
+   functionality except the ability to overwite an empty directory with
+   another. Rename allows this, but mv will assume you want to move your
+   target into the destination directory
