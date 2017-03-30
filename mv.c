@@ -12,6 +12,10 @@ void mv_usage(void)
   printf(2, "          mv <file1> [<file2> ...] <directory>\n");
 }
 
+/* dirname returns the string representing the directory
+ *  path up to but not including the filename.  Memory is
+ *  allocated with malloc
+ */
 static char* dirname(char* path)
 {
   char *dirn;
@@ -51,7 +55,10 @@ static char* dirname(char* path)
   return dirn;
 }
 
-//TODO: add functionality for . and ..
+/* basename returns the string representing the filename
+ *  stripped of the directory path leading up to ti.  
+ *  Memory is allocated with malloc
+ */
 static char* basename(char* path)
 {
   char *p, *ret;
@@ -60,11 +67,13 @@ static char* basename(char* path)
 
   //first eat trailing /'s
   while( *p == '/' && p != path) {
+    *p = '\0';
     p--;
   }
   if( p == path ) {
     ret = malloc(2);
-    ret[0] = '/'; ret[1] = '\0';
+    ret[0] = *p == '/' ? '/' : *p;
+    ret[1] = '\0';
     return ret;
   }
 
@@ -83,6 +92,12 @@ static char* basename(char* path)
   return ret;
 }
 
+
+/* This function creates a new path, allowing for
+ * fn to be a full path.  
+ *   Returns <dir>/<basename(fn)>
+ * Memory allocaed for return string with malloc 
+ */
 static char* build_path(char *dir, char *fn)
 {
   int dirlen, baselen;
@@ -103,7 +118,6 @@ static char* build_path(char *dir, char *fn)
 static int mv(char *old, char *new)
 {
   struct stat ost, nst;
-  int lennew = strlen(new);
   int ret;
   char *newpath, *dirn;
 
@@ -119,12 +133,8 @@ static int mv(char *old, char *new)
     return -1;
   }
 
-  // remove all trailing /'s from the destination name
-  while( lennew > 1 && new[lennew-1] == '/' ) {
-    new[--lennew] = '\0';
-  }
-
   ret = stat(new, &nst);
+  // if ret=0, then our new location exists; see if it's file,dir, or dev
   if( ret == 0 ) {
     // case1 : mv file <file>
     if( nst.type == T_FILE ) {
@@ -149,6 +159,7 @@ static int mv(char *old, char *new)
     }
   }
 
+  // ...otherwise ret != 0. if the parent dir exists, perform the move
   else {
     // case3 : mv file newfile
     dirn = dirname(new);

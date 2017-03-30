@@ -113,7 +113,6 @@ sys_fstat(void)
   return filestat(f, st);
 }
 
-
 // Create the path new as a link to the same inode as old.
 int
 sys_link(void)
@@ -179,6 +178,11 @@ isdirempty(struct inode *dp)
       return 0;
   }
   return 1;
+}
+
+
+int sysfile_unlink(char *path)
+{
 }
 
 //PAGEBREAK!
@@ -444,6 +448,9 @@ sys_pipe(void)
   return 0;
 }
 
+int rename_unlink(struct inode *ip)
+{
+}
 
 /* Author: Aaron Cox
  * prototype: int rename(char *oldpath, char *newpath);
@@ -452,8 +459,8 @@ int
 sys_rename(void)
 {
   char *old, *new, newfname[DIRSIZ], oldfname[DIRSIZ];
-  struct inode *nip, *ip;
-  struct inode *dpnew, *dpold;
+  struct inode *ip, *dpnew, *dpold;
+  struct inode *nip;
   struct dirent de;
   uint doff;
 
@@ -516,48 +523,45 @@ sys_rename(void)
     iunlock(dpold);
   }
 
-  /* Else if we are trying to rename a file***
-   * 1. If new file exists, unlink it.
+  /* 1. If new file exists, unlink it.
    * 2. Link (old, new)
    * 3. Unlink old
    */
   else if( ip->type == T_FILE ) {
-    // if nip != 0 , then new file exists. try to unlink it
     if( (nip = dirlookup(dpnew, newfname, &doff)) != 0 ) {
-      //check to make sure the old and new files aren't the same file
       if( ip->inum == nip->inum ) {
         end_op();
         return 0;
       }
-      // if the new file isn't a regular file, refuse to overwrite it
       if( nip->type != T_FILE ) {
         end_op();
         return -1;
       }
-
       ilock(dpnew);
       ilock(nip);
-      if(ip->nlink < 1)
+      if(ip->nlink < 1) {
         panic("rename: nlink < 1");
+      }
 
       // remove the directory entry
       memset(&de, 0, sizeof(de));
-      if( writei(dpnew, (char*)&de, doff, sizeof(de)) != sizeof(de) ) 
+      if( writei(dpnew, (char*)&de, doff, sizeof(de)) != sizeof(de) ) {
         panic("rename: writei");
+      }
       iunlockput(dpnew);
       nip->nlink--;
       iupdate(nip);
       iunlockput(nip);
     }
     // link old, new; at this point in the code it is guaranteed the new file
-    //   doesn't exist***
+    //   doesn't exist
     ilock(ip);
     ip->nlink++;
     iupdate(ip);
     iunlock(ip);
 
     ilock(dpnew);
-    // rename only works on the same device
+    //rename only works on the same device
     if( dpnew->dev != ip->dev || dirlink(dpnew, newfname, ip->inum) < 0 ) {
       iunlockput(dpnew);
       end_op();
@@ -565,7 +569,7 @@ sys_rename(void)
     }
     iunlockput(dpnew);
 
-    // finally, unlink the old file so we maintain only 1 link
+    // now unlink the old
     ilock(dpold);
     ilock(ip);
     if(ip->nlink < 1) {
@@ -590,8 +594,7 @@ sys_rename(void)
     iunlockput(ip);
   }
   
-  // else not reg. file or dir. quit w/ failure as I don't handle device files
-  // in this version
+  // else: we don't handle device files in this version
   else {
     end_op();
     return -1;
